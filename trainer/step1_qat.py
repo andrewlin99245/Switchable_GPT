@@ -15,7 +15,7 @@ BITS           = [8, 4, 2]             # target precisions (8-bit will be the te
 SEQ_LEN        = 256                   # synthetic sequence length
 BATCH_SIZE     = 4
 STEPS          = 3000                # ≈100 k examples @ bs=2
-KD_WEIGHT      = 1.0                   # α in CE + α·KL
+KD_WEIGHT      = 1.0                   
 T              = 2.0                   # soft-max temperature
 LR             = 2e-5
 CKPT_DIR       = "checkpoints/step1_qat"
@@ -121,17 +121,15 @@ def main():
 
             # Forward pass – student
             out_s = student(**batch)
-            ce    = out_s.loss                         # Cross-entropy
-
-            kd = 0.0
             
+            kd = 0.0
             with torch.no_grad():
                 teacher_logits = teacher(
                     input_ids=batch["input_ids"]
                 ).logits
             kd = kd_loss(out_s.logits, teacher_logits)
 
-            total_loss += ce + KD_WEIGHT * kd          # accumulate
+            total_loss += KD_WEIGHT * kd          # accumulate
 
         # === back-prop once per outer batch ===
         losses.append(total_loss.item())
