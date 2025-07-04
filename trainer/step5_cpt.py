@@ -8,7 +8,7 @@ import os, json, math, torch, torch.optim as optim, torch.nn as nn
 from transformers import AutoTokenizer, GPT2Config
 from transformers.models.gpt2.modeling_gpt2 import Conv1D
 from safetensors.torch import load_file as load_safetensors
-
+from matplotlib import pyplot as plt
 from ..switchable_lora import attach_single_lora, LoRAModule
 
 from ..quant.llm_qat       import patch_gpt2_for_qat
@@ -80,7 +80,7 @@ def main():
 
     optimizer = optim.AdamW(model.parameters(), lr=LR)
     model.train()
-
+    losses = []
     # 5) CPT loop
     for step, batch in enumerate(loader):
         if step >= MAX_STEPS: break
@@ -97,11 +97,17 @@ def main():
 
         batch = {k: v.to(DEVICE) for k, v in batch.items()}
         loss  = model(**batch).loss
-
+        losses.append(loss.item())
         loss.backward(); optimizer.step(); optimizer.zero_grad()
 
         log(f"[CPT] step={step:04d} active_bit={bit} loss={loss.item():.4f}")
 
+    plt.plot(losses)
+    plt.xlabel("Steps")
+    plt.ylabel("Loss")
+    plt.title("CPT Loss Curve")
+    plt.show()
+    plt.savefig("loss_curve.png")
     # 6) Save CPT-tuned checkpoint
     os.makedirs(STEP5_CKPT, exist_ok=True)
     model.save_pretrained(STEP5_CKPT); tokenizer.save_pretrained(STEP5_CKPT)

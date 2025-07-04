@@ -11,7 +11,7 @@ from ..quant.llm_qat import patch_gpt2_for_qat
 from ..gpt2_switchable import GPT2Switchable, attach_multi_lora
 from ..data import get_squad_loader
 from ..utils import log
-
+import matplotlib.pyplot as plt
 DEVICE       = "cuda" if torch.cuda.is_available() else "cpu"
 STEP1_CKPT   = "checkpoints/step1_qat"
 STEP3_CKPT   = "checkpoints/step3_instantnet"
@@ -64,7 +64,7 @@ def main():
 
     optimizer = optim.AdamW(model.parameters(), lr=LR)
     model.train()
-
+    losses = []
     # 6) InstantNet-style switchable-precision training loop
     for step, batch in enumerate(loader):
         if step >= MAX_STEPS:
@@ -83,14 +83,20 @@ def main():
             batch = {k: v.to(DEVICE) for k, v in batch.items()}
             out   = model(**batch)
             total_loss += out.loss
-
+        losses.append(total_loss.item())
         total_loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-
-        
         current_bit = BITS[step % len(BITS)]
         log(f"[InstantNet] step={step} loss={total_loss.item():.4f}")
+
+    plt.plot(losses)
+    plt.xlabel("Steps")
+    plt.ylabel("Loss")
+    plt.title("InstantNet Loss Curve")
+    plt.show()
+    plt.savefig("loss_curve.png")
+
 
     # 7) Save checkpoint & tokenizer
     os.makedirs(STEP3_CKPT, exist_ok=True)
