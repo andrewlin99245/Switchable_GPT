@@ -23,35 +23,49 @@ DEVICE         = "cuda" if torch.cuda.is_available() else "cpu"
 
 # ---------------------------------------------------------------------
 class SyntheticStream(IterableDataset):
-    """Infinite data-free stream from the FP teacher’s own generations."""
+    """Hybrid data-free stream: first 4 tokens argmax, rest sampled."""
     def __init__(self, teacher, tokenizer, seq_len=SEQ_LEN):
-        self.teacher     = teacher.eval()
-        self.tok         = tokenizer
-        self.seq_len     = seq_len
-        # Ensure we have a pad token
+        self.teacher = teacher.eval()
+        self.tok     = tokenizer
+        self.seq_len = seq_len
+
+        # Ensure pad_token
         if self.tok.pad_token is None:
             self.tok.pad_token = self.tok.eos_token
-        self.pad_id      = self.tok.pad_token_id
-        self.seed_prompts = ["The", "When", "Once", "Because", "In", "On", "While", "If"]
+        self.pad_id     = self.tok.pad_token_id
+        self.vocab_size = self.tok.vocab_size
 
     @torch.no_grad()
     def _gen_chunk(self):
-        prompt = random.choice(self.seed_prompts)
-        inp    = self.tok(prompt, return_tensors="pt").to(DEVICE)
-        out    = self.teacher.generate(
-            **inp,
-            max_length=self.seq_len + inp.input_ids.shape[-1],
-            do_sample=True,
-            temperature=1.0,
-            top_p=0.95,
-            pad_token_id=self.pad_id
-        )
-        chunk = out[0, -self.seq_len:]  # last up to seq_len tokens
-        # If it's too short (GPT2 stopped early), left-pad with pad_id
-        if chunk.shape[-1] < self.seq_len:
-            pad_len = self.seq_len - chunk.shape[-1]
-            pad_tensor = torch.full((pad_len,), self.pad_id, dtype=torch.long).to(DEVICE)
-            chunk = torch.cat([pad_tensor, chunk], dim=0)
+        # 1) Start with a random <start> token
+        start_id = random.randrange(self.vocab_size)
+        ids = torch.tensor([[start_id]], device=DEVICE)
+
+        # 2) Build up seq_len tokens one by one
+        generated = []
+        for i in range(self.seq_len):
+            # get logits for next token
+            logits = self.teacher(input_ids=ids).logits[0, -1]  # [vocab_size]
+            if i < 4:
+                # deterministically pick top-1
+                next_id = torch.argmax(logits).unsqueeze(0)
+            else:
+                # stochastic sampling (softmax + top-p 0.95)
+                probs = F.softmax(logits / 1.0, dim=-1)
+                # (optionally apply top-p filtering here)
+                next_id = torch.multinomial(probs, num_samples=1)
+            generated.append(next_id)
+            # append to ids for next step
+            ids = torch.cat([ids, next_id.unsqueeze(0)], dim=1)
+
+        chunk = torch.cat(generated, dim=0)  # [seq_len]
+
+        # 3) If early-stopped shorter, pad on the left
+        if chunk.size(0) < self.seq_len:
+            pad_len    = self.seq_len - chunk.size(0)
+            pad_tensor = torch.full((pad_len,), self.pad_id, dtype=torch.long, device=DEVICE)
+            chunk      = torch.cat([pad_tensor, chunk], dim=0)
+
         return chunk
 
     def __iter__(self):
@@ -80,14 +94,17 @@ def main():
     ).to(DEVICE)
 
     # 3) Data-free loader
+    #print("[QAT] Initializing data-free stream ...")
     stream  = SyntheticStream(teacher, tokenizer)
+    #print("[QAT] Data-free stream initialized.")
     loader  = DataLoader(stream, batch_size=BATCH_SIZE)
-
+    #print("[QAT] Data-free stream size")
     optimiser = optim.AdamW(student.parameters(), lr=LR)
     student.train()
-
+    #log("[QAT] Starting Step-1 QAT ...")
     # 4) Training loop
     for step, batch in enumerate(loader):
+        #print(f"[QAT] step={step}/{STEPS} ...", end="\r")
         if step >= STEPS:
             break
 
