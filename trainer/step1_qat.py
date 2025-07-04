@@ -14,7 +14,7 @@ from ..utils import log                # your existing logger
 BITS           = [8, 4, 2]             # target precisions (8-bit will be the teacher pass)
 SEQ_LEN        = 256                   # synthetic sequence length
 BATCH_SIZE     = 4
-STEPS          = 20000                # ≈100 k examples @ bs=2
+STEPS          = 3000                # ≈100 k examples @ bs=2
 KD_WEIGHT      = 1.0                   # α in CE + α·KL
 T              = 2.0                   # soft-max temperature
 LR             = 2e-5
