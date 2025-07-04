@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import IterableDataset, DataLoader
 from transformers import GPT2LMHeadModel, AutoTokenizer
-
+import matplotlib.pyplot as plt
 from ..gpt2_switchable import GPT2Switchable
 from ..utils import log                # your existing logger
 
@@ -103,6 +103,7 @@ def main():
     student.train()
     #log("[QAT] Starting Step-1 QAT ...")
     # 4) Training loop
+    losses = []
     for step, batch in enumerate(loader):
         #print(f"[QAT] step={step}/{STEPS} ...", end="\r")
         if step >= STEPS:
@@ -133,11 +134,19 @@ def main():
             total_loss += ce + KD_WEIGHT * kd          # accumulate
 
         # === back-prop once per outer batch ===
+        losses.append(total_loss.item())
         total_loss.backward()
         optimiser.step(); optimiser.zero_grad()
 
         log(f"[QAT] step={step}/{STEPS} loss={total_loss.item():.4f}")
 
+    # 5) Plot losses
+    plt.plot(losses)
+    plt.xlabel("Steps")
+    plt.ylabel("Loss")
+    plt.title("QAT Loss Curve")
+    plt.show()
+    plt.savefig("loss_curve.png")
     # 5) Save checkpoint
     os.makedirs(CKPT_DIR, exist_ok=True)
     student.save_pretrained(CKPT_DIR)
