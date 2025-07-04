@@ -124,12 +124,12 @@ def main():
             ce    = out_s.loss                         # Cross-entropy
 
             kd = 0.0
-            if bit != 8:                               # 8-bit acts as teacher pass
-                with torch.no_grad():
-                    teacher_logits = teacher(
-                        input_ids=batch["input_ids"]
-                    ).logits
-                kd = kd_loss(out_s.logits, teacher_logits)
+            
+            with torch.no_grad():
+                teacher_logits = teacher(
+                    input_ids=batch["input_ids"]
+                ).logits
+            kd = kd_loss(out_s.logits, teacher_logits)
 
             total_loss += ce + KD_WEIGHT * kd          # accumulate
 
