@@ -14,7 +14,7 @@ from ..utils import log
 import matplotlib.pyplot as plt
 DEVICE       = "cuda" if torch.cuda.is_available() else "cpu"
 STEP1_CKPT   = "checkpoints/step1_qat"
-STEP3_CKPT   = "checkpoints/step3_instantnet"
+STEP3_CKPT   = "checkpoints/step3_instantnet_new"
 BITS         = [8, 4, 2]
 LORA_RANK    = 8
 LR           = 2e-5
