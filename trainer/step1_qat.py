@@ -101,6 +101,7 @@ def main():
     #print("[QAT] Data-free stream size")
     optimiser = optim.AdamW(student.parameters(), lr=LR)
     student.train()
+    teacher.eval()
     #log("[QAT] Starting Step-1 QAT ...")
     # 4) Training loop
     losses = []
@@ -110,6 +111,8 @@ def main():
             break
 
         batch = {k: v.to(DEVICE) for k, v in batch.items()}
+        with torch.no_grad():
+            teach_logits = teacher(input_ids=batch["input_ids"]).logits
         total_loss = 0.0
 
         # === loop over each target precision ===
@@ -121,13 +124,7 @@ def main():
 
             # Forward pass – student
             out_s = student(**batch)
-            
-            kd = 0.0
-            with torch.no_grad():
-                teacher_logits = teacher(
-                    input_ids=batch["input_ids"]
-                ).logits
-            kd = kd_loss(out_s.logits, teacher_logits)
+            kd = kd_loss(out_s.logits, teach_logits)
 
             total_loss += KD_WEIGHT * kd          # accumulate
 
