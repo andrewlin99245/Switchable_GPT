@@ -19,7 +19,7 @@ from ..utils               import log
 # ──────────────────────────────────────────────────────────────── hyper-params
 DEVICE        = "cuda" if torch.cuda.is_available() else "cpu"
 STEP1_CKPT    = "checkpoints/step1_qat"
-STEP5_CKPT    = "checkpoints/step5_cpt"
+STEP5_CKPT    = "checkpoints/step5_cpt_new"
 BITS_SUPPORTED = [8, 7, 6, 5, 4, 3]          # model knows 8/4/2/3
 HIGH_BIT, LOW_BIT = 8, 3               # CPT bounds
 CYCLE_STEPS   = 200                    # one cosine cycle = 200 steps
